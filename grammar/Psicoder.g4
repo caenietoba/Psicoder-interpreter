@@ -43,11 +43,9 @@ seleccionar         : 'seleccionar' '(' ID ')' 'entre' casos 'fin_seleccionar';
 casos               : caso casos
                     | 'defecto' ':' comandos ;
 caso                : 'caso' expr ':' comandos romper ;
-asignacion_id       : ID '=' expr;
-leer                : 'leer' '(' ID ')' ';';
-//leer_id             : ID (',' ID)*
-//                    | ;
-imprimir            : 'imprimir' '(' expr (',' expr)* ')' ';';
+asignacion_id       : id_pos_estruct '=' expr;
+leer                : 'leer' '(' id_pos_estruct ')' ';';
+imprimir            : 'imprimir' '(' (expr|llamar_funcion) (',' expr)* ')' ';';
 romper              : 'romper' ';'
                     | ;
 llamar_funcion      : ID '(' pasar_parametros ')' ';';
@@ -67,6 +65,7 @@ expr                : expr MULOP expr
                     | expr SUMOP expr
                     | PIZQ expr PDER
                     | llamar_funcion
+                    | id_pos_estruct //Nueva opcion //Aun no esta implementado en el visitor
                     | DOUBLE
                     | INT
                     | CONST
@@ -82,6 +81,9 @@ tipo                : 'entero'
                     | 'booleano'
                     | ID
                     ;
+
+//Aun no esta implementado en el visitor
+id_pos_estruct       : ID ('.' ID)* ; //id con posibilidad de ser estructura
 
 COMMENT 		    : '/*' .*? '*/' -> skip ;
 LINE_COMMENT 	    : '//' ~[\r\n]* -> skip ;

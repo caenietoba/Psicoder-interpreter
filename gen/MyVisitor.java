@@ -6,11 +6,12 @@ import java.util.HashMap;
 
 public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
 
-    //HashMap<String,Object> estructuras = new HashMap<>();
-    ArrayList<HashMap> simbolos = new ArrayList<>();
-    HashMap<String,Object> funciones = new HashMap<>();
-    String parentId = null;
-    String estructuraId = null;
+    private ArrayList<HashMap> simbolos = new ArrayList<>(); //Tabla de simbolos general, en la cual estaran los imbolos del programa principal y sus scopes
+    private HashMap<String, PsicoderParser.FuncionContext> functions = new HashMap<>(); //hash que contendra las funciones declaradas por encima del la funcion principal
+    private HashMap<String, PsicoderParser.EstructuraContext> estructuras = new HashMap<>(); //hash que contendra las estructuras declaradas por encima del la funcion principal
+    private String idEstruct = null; //Variable que contendra el id de la estructura actual que ha sido declarada
+    private HashMap<String, Object> hashTemp = null; //tabla de simbolosde la función que ha sido llamada recientemente, se declara como null para ayudar con la comparación de is esta o no en una función
+    private final String NOASIGNADO = "je/4NmP-c$Kj34#_Z[[.wbb:R{Cr4beLw%K+@=QUzh=L6LcPde"; //Este valor se asignara a las variables que no sean declaradas pero no se les asigne ningun valor
 
     @Override
     public T visitS(PsicoderParser.SContext ctx) {
@@ -25,33 +26,21 @@ public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
         return null;
     }
 
-    HashMap<String, PsicoderParser.FuncionContext> functions = new HashMap<>();
     @Override
     public T visitFuncion(PsicoderParser.FuncionContext ctx) {
 
         String id = ctx.ID().getText();
 
-        if(funciones.get(id) != null)
+        if(functions.get(id) != null)
             System.out.println("Ese nombre de funcion ya existe");
 
         functions.put( id, ctx );
 
-        /*
-        String tipo = (String)visitTipo(ctx.tipo());
-        String id = ctx.ID().getText();
-        if(funciones.get(id) != null)
-            System.out.println("Ese nombre de funcion ya existe");
-        funciones.put(id, ctx);
-        if(visitRetornar(ctx.retornar()) != tipo){ //Revisar ctx.expr() dependiendo de que sea lo que devuelva
-            System.out.println("El tipo de retorno no cuadra");
-        }
-        */
         return null;
     }
 
     @Override
     public T visitRetornar(PsicoderParser.RetornarContext ctx) {
-        System.out.println( visitExpr( ctx.expr() ) );
         return visitExpr( ctx.expr() );
     }
 
@@ -75,7 +64,6 @@ public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
         return (T)parametros;
     }
 
-    private  HashMap<String, PsicoderParser.EstructuraContext> estructuras = new HashMap<>();
     @Override
     public T visitEstructura(PsicoderParser.EstructuraContext ctx) {
 
@@ -92,13 +80,48 @@ public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
     @Override
     public T visitDeclaracion(PsicoderParser.DeclaracionContext ctx) {
 
-        String tipo = (String)visitTipo( ctx.tipo() );
+        if( ctx.tipo().ID() != null ){ //Si la asignacion es una estructura, si es estructura se salta la parte de asignación
 
+            String id = ctx.tipo().ID().getText(); //Obtenemos el identificador
+            PsicoderParser.EstructuraContext estructuraCtx = estructuras.get( id ); //Obtenemos el ctx guardado en la declaración de la estructura
+
+            idEstruct = ( idEstruct != null ? idEstruct + "." + id : id ); //Cambiamos la variable global que nos dira en que estructura se esta, permite estrcturas anidadas
+            int i = 0; //Contador para mirar multiples declaraciones
+            while( estructuraCtx.declaracion(i) != null )
+                visitDeclaracion( estructuraCtx.declaracion(i) ); //Realizamos la declaricón correspondiente
+
+            idEstruct = null;
+        } else {
+
+            String tipo = (String) visitTipo(ctx.tipo()); //recogemos el tipo de dato que se va a asignar
+
+            int i = 0; //Contador para mirar multiples id's en una misma linea
+            while (ctx.ID(i) != null) {
+                String id = ctx.ID(i).getText();
+                Object asig = visitAsignacion(ctx.asignacion(i)); //obtenemos el valor de la asignación a dicho identificador
+
+                String asigTipo = asig.getClass().getSimpleName();
+
+                if (asig != NOASIGNADO && asigTipo != tipo) //Revisamos que en caso de haber sido asignado algun valor los tipos correspondan
+                    System.out.println("Mala asignación, no es posible asignar " + asigTipo + " a una variable tipo " + tipo);
+
+                String idAGuardar = (idEstruct != null ? idEstruct + "." + id : id); //Identificador que sera guardado en la tabla de simbolos permitiendo estructuras
+
+                simbolos.get(simbolos.size() - 1).put(idAGuardar, asig); //Guardamos el simbolo con su valor en la ultima posicion del array (ultimo scope)
+            }
+        }
 
         return visitChildren(ctx);
     }
 
-    @Override public T visitAsignacion(PsicoderParser.AsignacionContext ctx) { return visitChildren(ctx); }
+    @Override
+    public T visitAsignacion(PsicoderParser.AsignacionContext ctx) {
+
+        if( ctx.expr() != null )
+            return visitExpr( ctx.expr() );
+
+        return (T)NOASIGNADO; //retornamos el valor de no asignado
+    }
 
     @Override
     public T visitComandos(PsicoderParser.ComandosContext ctx) {
@@ -108,12 +131,14 @@ public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
     @Override
     public T visitComando(PsicoderParser.ComandoContext ctx) {
         if( ctx.imprimir() != null){
-            //System.out.println("Imprimir");
-            visitImprimir(ctx.imprimir());
+            System.out.println("asd");
+            visitImprimir( ctx.imprimir() );
         } else if( ctx.leer() != null ){
             visitLeer(ctx.leer());
         } else if( ctx.llamar_funcion() != null ){
             visitLlamar_funcion( ctx.llamar_funcion() );
+        } else if( ctx.declaracion() != null ){
+            visitDeclaracion( ctx.declaracion() );
         }
         return visitChildren(ctx);
     }
@@ -146,34 +171,14 @@ public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
         return visitChildren(ctx);
     }
 
-    /*@Override
-    public T visitLeer_id(PsicoderParser.Leer_idContext ctx) {
-
-        int i = 0;
-        Boolean hasAtLeastOneId = false;
-
-        while(ctx.ID(i) != null){
-            hasAtLeastOneId = true;
-            String id = ctx.ID(i).getText();
-
-            Scanner entradaEscaner = new Scanner (System.in); //Creación de un objeto Scanner
-
-            entradaTeclado = entradaEscaner.nextLine ();
-
-        }
-
-        return visitChildren(ctx);
-    }*/
-
     @Override
     public T visitImprimir(PsicoderParser.ImprimirContext ctx) {
-        visitChildren(ctx);
+        System.out.println( "Estamos en imprimir" );
+        System.out.println( visitChildren(ctx) + "Estamos en imprimir" ); //Lo de visit children
         return null;
     }
 
     @Override public T visitRomper(PsicoderParser.RomperContext ctx) { return visitChildren(ctx); }
-
-    HashMap<String, Object> hashTemp = null;
 
     @Override
     public T visitLlamar_funcion(PsicoderParser.Llamar_funcionContext ctx) {
@@ -389,13 +394,10 @@ public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
                 else
                     return (T)((String)expr1 + (String)expr2);
 
-            //expr1 = castearTiposEntero(expr1, tipoExpr1);
-            //expr2 = castearTiposEntero(expr2, tipoExpr2);
-
             Double ans = null;
 
             if( tipoExpr1 == "Boolean" )
-                expr1 = new Integer((Boolean) expr1 == true ? 1 : 0);
+                expr1 = new Integer((Boolean) expr1 ? 1 : 0);
             else if( tipoExpr1 == "Character" )
                 expr1 = new Integer((int)(Character)expr1);
 
@@ -420,7 +422,6 @@ public class MyVisitor<T> extends PsicoderBaseVisitor<T> {
                     //ans = Math.pow( (Double)expr1, (Double)expr2 );
                     //break;
                 case "+":
-                    System.out.println("Hola" +  (T)(Object)((tipoExpr1 == "Double" ? new Double((Double)expr1) : new Integer((Integer)expr1)) + (tipoExpr1 == "Double" ? new Double((Double)expr2) : new Integer((Integer)expr2))) ); //-----------------------------
                     return (T)(Object)((tipoExpr1 == "Double" ? new Double((Double)expr1) : new Integer((Integer)expr1)) + (tipoExpr1 == "Double" ? new Double((Double)expr2) : new Integer((Integer)expr2)));
                     //ans = (Double)expr1 + (Double)expr2;
                     //break;

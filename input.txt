@@ -4,6 +4,7 @@ fin_funcion
 
 funcion_principal
 
-    f(2,4);
+    imprimir( 2 );
+    imprimir( f(2,4) );
 
 fin_principal
